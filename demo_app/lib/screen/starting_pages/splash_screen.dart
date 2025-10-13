@@ -68,7 +68,7 @@ class _SplashScreenState extends State<SplashScreen>
   void _goToHome() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => LanguageScreen()),
+      MaterialPageRoute(builder: (context) => Languagescreen()),
     );
   }
 
@@ -137,7 +137,7 @@ class _SplashScreenState extends State<SplashScreen>
                         child: Transform.scale(
                           scale: 1 - (_slideAnimation.value * 0.3),
                           child: Image.asset(
-                            'asset/image/logo_bg_black.jpg',
+                            'assets/images/logo_bg_black.jpg',
                             width: 300,
                             height: 300,
                           ),
