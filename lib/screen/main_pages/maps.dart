@@ -4,6 +4,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:demo_app/restaurant_data.dart';
+import 'package:demo_app/data/color.dart';
+import 'package:demo_app/data/fake_data.dart';
+import 'home_screen.dart';
+import 'cart_screen.dart';
+import 'profile_screen.dart';
 
 class NearbyPage extends StatefulWidget {
   final String pinCode;
@@ -16,6 +21,8 @@ class NearbyPage extends StatefulWidget {
 class _NearbyPageState extends State<NearbyPage> {
   final _mapController = MapController();
   final _location = Location();
+  final _sheetController = DraggableScrollableController();
+  int _currentIndex = 1; // Nearby is at index 1
 
   late Map<String, List<Map<String, dynamic>>> allServices;
   List<Map<String, dynamic>> displayedServices = [];
@@ -87,8 +94,44 @@ class _NearbyPageState extends State<NearbyPage> {
     });
   }
 
+  void _navigateToScreen(int index, String label) {
+    setState(() {
+      _currentIndex = index;
+    });
+
+    switch (label) {
+      case 'Home':
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => HomePage()),
+              (Route<dynamic> route) => false,
+        );
+        break;
+      case 'Nearby':
+      // Already on nearby page, do nothing
+        break;
+      case 'Cart':
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => CartScreen()),
+              (Route<dynamic> route) => false,
+        );
+        break;
+      case 'Profile':
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => ProfileScreen()),
+              (Route<dynamic> route) => false,
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       body: Column(
         children: [
@@ -98,8 +141,8 @@ class _NearbyPageState extends State<NearbyPage> {
               children: [
                 _buildMap(),
                 Positioned(
-                  right: 16,
-                  bottom: 16,
+                  right: screenWidth * 0.04,
+                  bottom: screenHeight * 0.12,
                   child: _buildMyLocationBtn(),
                 ),
                 _buildServicesSheet(),
@@ -108,17 +151,21 @@ class _NearbyPageState extends State<NearbyPage> {
           ),
         ],
       ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
   Widget _buildHeader() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Container(
       color: Colors.white,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        left: 16,
-        right: 16,
-        bottom: 12,
+        top: MediaQuery.of(context).padding.top + screenHeight * 0.01,
+        left: screenWidth * 0.04,
+        right: screenWidth * 0.04,
+        bottom: screenHeight * 0.015,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +174,13 @@ class _NearbyPageState extends State<NearbyPage> {
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.black),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => HomePage()),
+                        (Route<dynamic> route) => false,
+                  );
+                },
               ),
               const Icon(Icons.location_on_rounded, color: primaryTeal, size: 30),
               const SizedBox(width: 1),
@@ -324,6 +377,13 @@ class _NearbyPageState extends State<NearbyPage> {
       options: MapOptions(
         initialCenter: ServiceData.getCenter(widget.pinCode),
         initialZoom: 13.5,
+        onTap: (tapPosition, point) {
+          _sheetController.animateTo(
+            0.12,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        },
         onMapEvent: (e) {
           if (e is MapEventMove || e is MapEventMoveEnd) {
             _updateVisibleServices();
@@ -442,83 +502,211 @@ class _NearbyPageState extends State<NearbyPage> {
   }
 
   Widget _buildServicesSheet() {
-    if (visibleServices.isEmpty) return const SizedBox.shrink();
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return DraggableScrollableSheet(
-      initialChildSize: 0.14,
+      controller: _sheetController,
+      initialChildSize: 0.12,
       minChildSize: 0.12,
-      maxChildSize: 0.6,
+      maxChildSize: 0.88,
       snap: true,
+      snapSizes: const [0.12, 0.4, 0.88],
+      shouldCloseOnMinExtent: false,
       builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(16),
-              topRight: Radius.circular(16),
+        return SingleChildScrollView(
+          controller: scrollController,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(screenWidth * 0.05),
+                topRight: Radius.circular(screenWidth * 0.05),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: screenHeight * 0.02,
+                  offset: Offset(0, -screenHeight * 0.006),
+                ),
+              ],
             ),
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade400,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    const Icon(Icons.storefront, color: primaryTeal, size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Nearby (${visibleServices.length})',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.separated(
-                  controller: scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: visibleServices.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, int i) {
-                    final s = visibleServices[i];
-                    final cat = _getCategoryForService(s);
-                    return ListTile(
-                      leading: const Icon(Icons.store, color: primaryTeal),
-                      title: Text(
-                        s['name'] as String,
-                        style: const TextStyle(color: Colors.black),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        '$cat • ${s['distance'] as String}',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                      onTap: () {
-                        _mapController.move(s["position"], 16.0);
-                        final helper = CategoryHelper(cat);
-                        _showDetail(s, helper);
-                      },
-                    );
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle - fixed and easy to grab
+                GestureDetector(
+                  onVerticalDragUpdate: (details) {
+                    // Allow swiping from anywhere in the handle area
                   },
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: screenWidth * 0.12,
+                          height: screenHeight * 0.006,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade400,
+                            borderRadius: BorderRadius.circular(screenHeight * 0.003),
+                          ),
+                        ),
+                        SizedBox(height: screenHeight * 0.01),
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: screenWidth * 0.05,
+                            vertical: screenHeight * 0.008,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.storefront,
+                                color: primaryTeal,
+                                size: screenWidth * 0.05,
+                              ),
+                              SizedBox(width: screenWidth * 0.02),
+                              Expanded(
+                                child: Text(
+                                  'Nearby (${displayedServices.length})',
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.038,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.keyboard_arrow_up,
+                                color: Colors.grey.shade500,
+                                size: screenWidth * 0.05,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                Divider(height: 1, thickness: 0.5),
+                // Content area
+                if (displayedServices.isEmpty)
+                  _buildEmptyState()
+                else
+                  ListView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    shrinkWrap: true,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.04,
+                      vertical: screenHeight * 0.01,
+                    ),
+                    itemCount: displayedServices.length,
+                    itemBuilder: (_, int i) {
+                      final s = displayedServices[i];
+                      final cat = _getCategoryForService(s);
+                      return Container(
+                        margin: EdgeInsets.symmetric(
+                          vertical: screenHeight * 0.006,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: ListTile(
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: screenWidth * 0.035,
+                            vertical: screenHeight * 0.008,
+                          ),
+                          leading: Container(
+                            width: screenWidth * 0.1,
+                            height: screenWidth * 0.1,
+                            decoration: BoxDecoration(
+                              color: primaryTeal.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(screenWidth * 0.02),
+                            ),
+                            child: Icon(
+                              Icons.store,
+                              color: primaryTeal,
+                              size: screenWidth * 0.05,
+                            ),
+                          ),
+                          title: Text(
+                            s['name'] as String,
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                              fontSize: screenWidth * 0.035,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '$cat • ${s['distance'] as String}',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: screenWidth * 0.031,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.grey,
+                            size: screenWidth * 0.04,
+                          ),
+                          onTap: () {
+                            _mapController.move(s["position"], 16.0);
+                            final helper = CategoryHelper(cat);
+                            _showDetail(s, helper);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                SizedBox(height: screenHeight * 0.02),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return Container(
+      padding: EdgeInsets.all(screenWidth * 0.08),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.store_outlined,
+            size: screenWidth * 0.12,
+            color: Colors.grey.shade400,
+          ),
+          SizedBox(height: screenHeight * 0.02),
+          Text(
+            'No shops in view',
+            style: TextStyle(
+              fontSize: screenWidth * 0.04,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          SizedBox(height: screenHeight * 0.01),
+          Text(
+            'Move the map to see nearby shops',
+            style: TextStyle(
+              fontSize: screenWidth * 0.035,
+              color: Colors.grey.shade500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
@@ -527,6 +715,117 @@ class _NearbyPageState extends State<NearbyPage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => DetailSheet(service: service, helper: helper),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    final List<Map<String, dynamic>> navItems = [
+      {
+        'icon': Icons.home_outlined,
+        'selectedIcon': Icons.home,
+        'label': 'Home',
+      },
+      {
+        'icon': Icons.location_on_outlined,
+        'selectedIcon': Icons.location_on,
+        'label': 'Nearby',
+      },
+      {
+        'icon': Icons.shopping_cart_outlined,
+        'selectedIcon': Icons.shopping_cart,
+        'label': 'Cart',
+      },
+      {
+        'icon': Icons.person_outline,
+        'selectedIcon': Icons.person,
+        'label': 'Profile',
+      },
+    ];
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: primary_colour,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: primary_colour.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
+        child: SizedBox(
+          height: 80,
+          child: Row(
+            children: navItems.asMap().entries.map((entry) {
+              int index = entry.key;
+              Map<String, dynamic> item = entry.value;
+              bool isSelected = _currentIndex == index;
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    _navigateToScreen(index, item['label']);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [primary_colour_87, primary_colour_54],
+                      )
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: EdgeInsets.all(isSelected ? 8 : 6),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? secondary_colour.withOpacity(0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            isSelected ? item['selectedIcon'] : item['icon'],
+                            color: isSelected
+                                ? tertiary_colour[600]
+                                : secondary_colour,
+                            size: isSelected ? 26 : 24,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontSize: isSelected ? 12 : 11,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: isSelected
+                                ? tertiary_colour[600]
+                                : secondary_colour,
+                          ),
+                          child: Text(item['label']),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -630,7 +929,13 @@ class _SearchPageState extends State<SearchPage> {
           final iconPath = s["icon"] as String?;
 
           return InkWell(
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => HomePage()),
+                    (Route<dynamic> route) => false,
+              );
+            },
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               padding: const EdgeInsets.all(12),

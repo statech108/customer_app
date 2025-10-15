@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:demo_app/data/color.dart';
+import 'package:demo_app/data/fake_data.dart';
+import 'home_screen.dart';
+import 'profile_screen.dart';
+import 'maps.dart';
 
 // Helper function for formatting time (e.g., 7:00 AM)
 String _formatTime(int hour) {
@@ -20,8 +25,6 @@ List<String> _generateDeliverySlots() {
   }
   return slots;
 }
-
-void main() => runApp(const MyApp());
 
 // Data Model for a cart item
 class CartItem {
@@ -190,35 +193,16 @@ class CartData extends ChangeNotifier {
   }
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+
+class CartScreen extends StatefulWidget {
+  const CartScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider<CartData>(
-      create: (BuildContext context) => CartData(),
-      builder: (BuildContext context, Widget? child) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Shopping Cart',
-          theme: ThemeData(
-            primarySwatch: Colors.teal,
-            scaffoldBackgroundColor: Colors.grey[50],
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black87,
-              elevation: 0,
-            ),
-          ),
-          home: const CartScreen(),
-        );
-      },
-    );
-  }
+  State<CartScreen> createState() => _CartScreenState();
 }
 
-class CartScreen extends StatelessWidget {
-  const CartScreen({Key? key}) : super(key: key);
+class _CartScreenState extends State<CartScreen> {
+  int _currentIndex = 2; // Cart is at index 2
 
   @override
   Widget build(BuildContext context) {
@@ -262,6 +246,158 @@ class CartScreen extends StatelessWidget {
           ],
         ),
       ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    final List<Map<String, dynamic>> navItems = [
+      {
+        'icon': Icons.home_outlined,
+        'selectedIcon': Icons.home,
+        'label': 'Home',
+      },
+      {
+        'icon': Icons.location_on_outlined,
+        'selectedIcon': Icons.location_on,
+        'label': 'Nearby',
+      },
+      {
+        'icon': Icons.shopping_cart_outlined,
+        'selectedIcon': Icons.shopping_cart,
+        'label': 'Cart',
+      },
+      {
+        'icon': Icons.person_outline,
+        'selectedIcon': Icons.person,
+        'label': 'Profile',
+      },
+    ];
+
+    return Container(
+      margin: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: primary_colour,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: primary_colour.withOpacity(0.15),
+            blurRadius: 20,
+            offset: Offset(0, -5),
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
+        child: Container(
+          height: 80,
+          child: Row(
+            children: navItems.asMap().entries.map((entry) {
+              int index = entry.key;
+              Map<String, dynamic> item = entry.value;
+              bool isSelected = _currentIndex == index;
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _currentIndex = index;
+                    });
+
+                    //Navigate of app bar
+                    if (item['label'] == 'Home') {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => HomePage()),
+                      );
+                    }
+
+                    if (item['label'] == 'Nearby') {
+                      // Get pincode from fake data (user's address)
+                      final MockDataService mockDataService = MockDataService();
+                      final User currentUser = mockDataService.getCurrentUser();
+                      String pincode = '110001'; // Default pincode
+                      
+                      // Get pincode from user's first address if available
+                      if (currentUser.addresses.isNotEmpty) {
+                        pincode = currentUser.addresses.first.pinCode;
+                      }
+                      
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => NearbyPage(pinCode: pincode)),
+                      );
+                    }
+
+                    if (item['label'] == 'Cart') {
+                      // Already on cart page, do nothing
+                    }
+
+                    if (item['label'] == 'Profile') {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProfileScreen(),
+                        ),
+                      );
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [primary_colour_87, primary_colour_54],
+                      )
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedContainer(
+                          duration: Duration(milliseconds: 200),
+                          padding: EdgeInsets.all(isSelected ? 8 : 6),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? secondary_colour.withOpacity(0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            isSelected ? item['selectedIcon'] : item['icon'],
+                            color: isSelected
+                                ? tertiary_colour[600]
+                                : secondary_colour,
+                            size: isSelected ? 26 : 24,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        AnimatedDefaultTextStyle(
+                          duration: Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontSize: isSelected ? 12 : 11,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: isSelected
+                                ? tertiary_colour[600]
+                                : secondary_colour,
+                          ),
+                          child: Text(item['label']),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -285,7 +421,12 @@ class _Header extends StatelessWidget {
           child: Row(
             children: <Widget>[
               GestureDetector(
-                onTap: () => Navigator.maybePop(context),
+              onTap: () {
+        Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomePage()),
+        );
+        },
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:demo_app/data/color.dart';
 import 'package:demo_app/screen/main_pages/home_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +15,12 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  String _verificationId = '';
+  bool _isOTPSent = false;
+  bool _isLoading = false;
 
   Future<void> _saveUserData(String name, String phone) async {
     final prefs = await SharedPreferences.getInstance();
@@ -20,104 +28,84 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('user_phone', phone);
   }
 
-  // Handle login/signup
-  void _handleLogin() {
-    String user_name = _nameController.text.trim();
-    String user_phoneNumber = _phoneController.text.trim();
-
-    if (user_name.isEmpty) {
-      _showSnackBar('Please enter your name');
-      return;
-    }
-
-    if (user_phoneNumber.isEmpty) {
-      _showSnackBar('Please enter your phone number');
-      return;
-    }
-
-    if (user_phoneNumber.length != 10) {
-      _showSnackBar('Please enter a valid phone number');
-      return;
-    }
-
-    // Here you would typically integrate with Firebase Auth or your backend
-    _showSnackBar('Login/Signup initiated for $user_name ($user_phoneNumber)');
-
-    // Navigate to next screen or show OTP dialog
-    _showOTPDialog();
-  }
-
-  // Show OTP verification dialog
-  void _showOTPDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: background_colour,
-          title: Text('Verify OTP', style: TextStyle(color: primary_colour)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Enter the 6-digit code sent to ${_phoneController.text}',
-                style: TextStyle(color: primary_colour_54),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: InputDecoration(
-                  hintText: 'Enter OTP',
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: primary_colour),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel', style: TextStyle(color: primary_colour_54)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.of(context).pop(); // Close OTP dialog
-                _showSnackBar('Login successful!');
-
-                //Shared Preferences
-                await _saveUserData(
-                  _nameController.text.trim(),
-                  _phoneController.text.trim(),
-                );
-
-                // Navigate to Home Page
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => HomePage()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primary_colour,
-                foregroundColor: secondary_colour,
-              ),
-              child: const Text('Verify'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Show snackbar message
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: primary_colour),
     );
   }
 
-  // Skip login process
+  // 🔹 Step 1: Send OTP
+  Future<void> _sendOTP() async {
+    String userPhone = _phoneController.text.trim();
+
+    if (userPhone.isEmpty || userPhone.length != 10) {
+      _showSnackBar('Please enter a valid phone number');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    await _auth.verifyPhoneNumber(
+      phoneNumber: '+91$userPhone',
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        await _auth.signInWithCredential(credential);
+        _onLoginSuccess();
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        _showSnackBar('Verification failed: ${e.message}');
+        setState(() => _isLoading = false);
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        setState(() {
+          _verificationId = verificationId;
+          _isOTPSent = true;
+          _isLoading = false;
+        });
+        _showSnackBar('OTP sent successfully');
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {
+        _verificationId = verificationId;
+      },
+    );
+  }
+
+  // 🔹 Step 2: Verify OTP
+  Future<void> _verifyOTP() async {
+    String otp = _otpController.text.trim();
+
+    if (otp.length != 6) {
+      _showSnackBar('Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      PhoneAuthCredential credential =
+      PhoneAuthProvider.credential(verificationId: _verificationId, smsCode: otp);
+      await _auth.signInWithCredential(credential);
+      _onLoginSuccess();
+    } catch (e) {
+      _showSnackBar('Invalid OTP, please try again');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // 🔹 After successful login
+  Future<void> _onLoginSuccess() async {
+    await _saveUserData(
+      _nameController.text.trim(),
+      _phoneController.text.trim(),
+    );
+    _showSnackBar('Login successful!');
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage()),
+    );
+  }
+
+  // 🔹 Skip login
   void _skipLogin() {
     _showSnackBar('Login skipped');
     Navigator.pushReplacement(
@@ -140,23 +128,18 @@ class _LoginScreenState extends State<LoginScreen> {
               alignment: Alignment.bottomCenter,
               child: TextButton(
                 onPressed: _skipLogin,
-                child: Text(
-                  'Skip login',
-                  style: TextStyle(color: primary_colour_54, fontSize: 14),
-                ),
+                child: Text('Skip login', style: TextStyle(color: primary_colour_54, fontSize: 14)),
               ),
             ),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(height: 40),
-
-            // App Logo/Title
+            const SizedBox(height: 40),
             Container(
               width: 100,
               height: 100,
@@ -166,127 +149,127 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Icon(Icons.person, size: 50, color: secondary_colour),
             ),
-
-            SizedBox(height: 24),
-
+            const SizedBox(height: 24),
             Text(
-              'Welcome',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: primary_colour,
-              ),
+              _isOTPSent ? 'Verify OTP' : 'Welcome',
+              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primary_colour),
             ),
-
-            SizedBox(height: 8),
-
+            const SizedBox(height: 8),
             Text(
-              'Login or Sign Up with Phone Number',
+              _isOTPSent
+                  ? 'Enter the 6-digit code sent to ${_phoneController.text}'
+                  : 'Login or Sign Up with Phone Number',
               style: TextStyle(fontSize: 16, color: primary_colour_54),
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 40),
 
-            SizedBox(height: 40),
-
-            // Name Input
-            Container(
-              margin: EdgeInsets.only(bottom: 20),
-              child: TextField(
+            if (!_isOTPSent) ...[
+              // Name Input
+              _buildTextField(
                 controller: _nameController,
-                style: TextStyle(color: primary_colour),
-                decoration: InputDecoration(
-                  labelText: 'Name',
-                  labelStyle: TextStyle(color: primary_colour_54), // default
-                  floatingLabelStyle: TextStyle(
-                    color: primary_colour,
-                  ), // when focused
-                  hintText: 'Enter your full name',
-                  hintStyle: TextStyle(color: primary_colour_38),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: primary_colour),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                label: 'Name',
+                hint: 'Enter your full name',
               ),
-            ),
+              const SizedBox(height: 20),
 
-            // Phone Number Input
-            Container(
-              margin: EdgeInsets.only(bottom: 20),
-              child: TextField(
+              // Phone Input
+              _buildTextField(
                 controller: _phoneController,
+                label: 'Phone Number',
+                hint: 'Enter mobile number',
+                prefix: '+91 ',
                 keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 32),
+
+              // Continue Button
+              _buildButton(
+                title: 'Continue',
+                onPressed: _sendOTP,
+              ),
+            ] else ...[
+              // OTP Input
+              TextField(
+                controller: _otpController,
+                maxLength: 6,
+                keyboardType: TextInputType.number,
                 style: TextStyle(color: primary_colour),
                 decoration: InputDecoration(
-                  labelText: 'Phone Number',
-                  labelStyle: TextStyle(color: primary_colour_54), // default
-                  floatingLabelStyle: TextStyle(
-                    color: primary_colour,
-                  ), // when focused
-                  hintText: 'Enter mobile number',
-                  hintStyle: TextStyle(color: primary_colour_38),
-                  prefixIcon: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    child: Text(
-                      '+91',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: primary_colour,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  prefixIconConstraints: BoxConstraints(
-                    minWidth: 0,
-                    minHeight: 0,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  labelText: 'OTP',
+                  counterText: '',
+                  labelStyle: TextStyle(color: primary_colour_54),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: primary_colour),
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
-            ),
-
-            SizedBox(height: 32),
-
-            // Continue Button
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primary_colour,
-                  foregroundColor: secondary_colour,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                child: Text(
-                  'Continue',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+              const SizedBox(height: 32),
+              _buildButton(
+                title: 'Verify OTP',
+                onPressed: _verifyOTP,
               ),
-            ),
+            ],
 
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-            // Terms and Privacy
-            Text(
-              'By continuing, you agree to our Terms of service & Privacy policy',
-              style: TextStyle(fontSize: 12, color: primary_colour_54),
-              textAlign: TextAlign.center,
-            ),
+            if (!_isOTPSent)
+              Text(
+                'By continuing, you agree to our Terms of Service & Privacy Policy',
+                style: TextStyle(fontSize: 12, color: primary_colour_54),
+                textAlign: TextAlign.center,
+              ),
+
+            if (_isLoading) const SizedBox(height: 20),
+            if (_isLoading) const CircularProgressIndicator(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    String prefix = '',
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: TextStyle(color: primary_colour),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        hintStyle: TextStyle(color: primary_colour_38),
+        labelStyle: TextStyle(color: primary_colour_54),
+        prefixText: prefix,
+        prefixStyle: TextStyle(color: primary_colour, fontWeight: FontWeight.w500),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: primary_colour),
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildButton({required String title, required VoidCallback onPressed}) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary_colour,
+          foregroundColor: secondary_colour,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
+        child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -295,6 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 }

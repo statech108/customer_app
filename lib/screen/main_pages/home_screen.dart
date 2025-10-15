@@ -8,6 +8,7 @@ import 'package:demo_app/data/shop.dart';
 import 'package:demo_app/data/personal.dart';
 import 'maps.dart';
 import 'package:demo_app/data/restaurant_data.dart';
+import 'package:demo_app/data/fake_data.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -404,28 +405,35 @@ class _HomePageState extends State<HomePage> {
 
                     //Navigate of app bar
                     if (item['label'] == 'Home') {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => HomePage()),
-                      );
+                      // Already on home page, do nothing
                     }
 
                     if (item['label'] == 'Nearby') {
-                      Navigator.push(
+                      // Get pincode from fake data (user's address)
+                      final MockDataService mockDataService = MockDataService();
+                      final User currentUser = mockDataService.getCurrentUser();
+                      String pincode = '110001'; // Default pincode
+                      
+                      // Get pincode from user's first address if available
+                      if (currentUser.addresses.isNotEmpty) {
+                        pincode = currentUser.addresses.first.pinCode;
+                      }
+                      
+                      Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => PinCodeInputPage()),
+                        MaterialPageRoute(builder: (context) => NearbyPage(pinCode: pincode)),
                       );
                     }
 
                     if (item['label'] == 'Cart') {
-                      Navigator.push(
+                      Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (context) => CartScreen()),
                       );
                     }
 
                     if (item['label'] == 'Profile') {
-                      Navigator.push(
+                      Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
                           builder: (context) => ProfileScreen(),
@@ -834,152 +842,5 @@ class _HomePageState extends State<HomePage> {
         },
       ),
     );
-  }
-}
-
-// NEW PINCODE INPUT PAGE
-class PinCodeInputPage extends StatefulWidget {
-  const PinCodeInputPage({super.key});
-
-  @override
-  State<PinCodeInputPage> createState() => _PinCodeInputPageState();
-}
-
-class _PinCodeInputPageState extends State<PinCodeInputPage> {
-  final _pinController = TextEditingController();
-  String? error;
-
-  void _submit() {
-    final pin = _pinController.text.trim();
-    if (pin.isEmpty) {
-      setState(() => error = "Please enter a pin code");
-      return;
-    }
-    if (!ServiceData.isValidPinCode(pin)) {
-      setState(() => error = "Invalid pin code");
-      return;
-    }
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => NearbyPage(pinCode: pin)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.blue.shade400, Colors.blue.shade800],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        )
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.location_city,
-                      size: 60,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  const Text(
-                    "Find Nearby Services",
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 48),
-                  Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        )
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        TextField(
-                          controller: _pinController,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          decoration: InputDecoration(
-                            labelText: "Pin Code",
-                            prefixIcon: const Icon(Icons.pin_drop),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            counterText: "",
-                            errorText: error,
-                          ),
-                          onChanged: (_) => setState(() => error = null),
-                          onSubmitted: (_) => _submit(),
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            onPressed: _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade700,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              "Continue",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pinController.dispose();
-    super.dispose();
   }
 }
